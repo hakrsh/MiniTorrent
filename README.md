@@ -19,7 +19,7 @@ make -j2
 
 ### Tracker
 
-- Run Tracker:
+ Run Tracker:
 
 ```
 ./tracker​ <TRACKER INFO FILE> <TRACKER NUMBER>
@@ -36,7 +36,7 @@ Ex:
 8088
 ```
 
-- Close Tracker:
+ Close Tracker:
 
 ```
 quit
