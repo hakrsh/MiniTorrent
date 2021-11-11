@@ -12,7 +12,7 @@
 ## Build Instructions
 
 ```
-1. make
+1. make -j2
 ```
 
 ## Usage
