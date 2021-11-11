@@ -2,7 +2,7 @@
 
 ## Dependencies 
 
-1. G++ compiler
+1. g++ compiler
    - `sudo apt-get install g++`
 2. OpenSSL library
    - `sudo apt-get install openssl`
@@ -12,14 +12,14 @@
 ## Build Instructions
 
 ```
-1. make -j2
+make -j2
 ```
 
 ## Usage
 
 ### Tracker
 
-1. Run Tracker:
+- Run Tracker:
 
 ```
 ./tracker​ <TRACKER INFO FILE> <TRACKER NUMBER>
@@ -36,7 +36,7 @@ Ex:
 8088
 ```
 
-2. Close Tracker:
+- Close Tracker:
 
 ```
 quit
@@ -163,5 +163,6 @@ stop_share ​<group_id> <file_name>
 ## Assumptions
 
 1. Only one tracker is implemented and that tracker should always be online.
-2. Cross client login is restriced, ie. ip&port are bound to the user during user creation.
+2. Cross client login is restricted, ie. ip and port are bound to the user during user creation.
 3. File paths should be absolute.
+
