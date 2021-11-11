@@ -3,9 +3,9 @@
 ## Dependencies 
 
 1. g++ compiler
-   - `sudo apt-get install g++`
+   - `sudo apt install g++`
 2. OpenSSL library
-   - `sudo apt-get install openssl`
+   - `sudo apt install openssl`
 
 **Platform:** Linux <br/>
 
@@ -149,12 +149,12 @@ stop_share ​<group_id> <file_name>
 5. User can fetch list of all Groups in server.
 6. User can join/leave group.
 7. Group admin can accept group join requests.
-8. Share file across group: Shares the filename and SHA1 hash of the complete file as well as piecewise SHA1 with the tracker.
+8. Share file across group: Shares the filename and SHA1 hash of the complete file.
 9. Fetch list of all sharable files in a Group.
 10. Download:
     1. Retrieve peer information from tracker for the file.
-    2. Download file from multiple peers (different pieces of file from different peers - ​piece selection algorithm​) simultaneously and all the files which client downloads will be shareable to other users in the same group. File integrity is ensured using SHA1 comparison.
-11. Piece selection algorithm used: Selecting peers in circular fashion
+    2. Download file from multiple peers (different pieces of file from different peers - ​piece selection algorithm​) simultaneously and file integrity is ensured using SHA1 comparison.
+11. Piece selection algorithm used: Selecting peers in circular fashion.
 12. Show downloads.
 13. Stop sharing file.
 14. Logout - stops sharing all files.
