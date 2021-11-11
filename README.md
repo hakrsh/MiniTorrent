@@ -47,7 +47,6 @@ quit
 1. Run Client:
 
 ```
-cd client
 ./client​ <IP>:<PORT> <TRACKER INFO FILE>
 ex: ./client 127.0.0.1:18000 tracker_info.txt
 ```
