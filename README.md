@@ -2,9 +2,9 @@
 
 ## Dependencies 
 
-*. g++ compiler
+* g++ compiler
    - `sudo apt install g++`
-*. OpenSSL library
+* OpenSSL library
    - `sudo apt install openssl`
 
 **Platform:** Linux <br/>
