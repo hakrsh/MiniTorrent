@@ -82,9 +82,10 @@ void download(int new_socket) {
   // clear the chunk
   memset(chunk, 0, CHUNK_SIZE);
   LOG(INFO) << "Reading chunk " + chunk_no + " from " + path;
-  // int sleep_time = rand() % 3 + 1;
-  // LOG(INFO) << "chunk_no: " + chunk_no + " delay: " + to_string(sleep_time);
-  // this_thread::sleep_for(chrono::seconds(sleep_time));
+  // uncomment the following line to simulate slow download
+  /* int sleep_time = rand() % 3 + 1;
+  LOG(INFO) << "chunk_no: " + chunk_no + " delay: " + to_string(sleep_time);
+  this_thread::sleep_for(chrono::seconds(sleep_time)); */
   int bytes_read = pread(fd, chunk, CHUNK_SIZE, chunk_no_ll * CHUNK_SIZE);
   close(fd);
   if (bytes_read == -1) {
@@ -199,6 +200,7 @@ int connect_to_server(string src, int chunk_no, int output_file_fd, string ip,
   // write to file using pwrite()
   LOG(INFO) << "writing chunk " + to_string(chunk_no) + " to output file at location (chunk_no * CHUNK_SIZE): " + to_string(chunk_no * CHUNK_SIZE);
   pwrite(output_file_fd, buffer, offset, chunk_no * CHUNK_SIZE);
+  close(sock);
   return 0;
 }
 
@@ -236,7 +238,6 @@ void getchunks(vector<peer_details> peers, int output_file_fd,
   // for (auto &t : threads) {
   //   t.join();
   // }
-  // close file
   close(output_file_fd);
   LOG(INFO) << fname + " downloaded successfully.";
   // print size of output file
