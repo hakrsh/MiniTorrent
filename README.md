@@ -5,14 +5,17 @@
 * g++ compiler
    - `sudo apt install g++`
 * OpenSSL library
-   - `sudo apt install openssl`
+   - `sudo apt install openssl libssl-dev`
 
 **Platform:** Linux <br/>
 
 ## Build Instructions
 
 ```
-make -j2
+mkdir -p build
+mkdir -p build/log
+cmake ..
+make 
 ```
 
 ## Usage
@@ -23,7 +26,7 @@ make -j2
 
 ```
 ./tracker​ <TRACKER INFO FILE> <TRACKER NUMBER>
-ex: ./tracker tracker_info.txt 1
+ex: ./tracker ../tracker_info.txt 1
 ```
 
 `<TRACKER INFO FILE>` contains the IP, Port details of all the trackers.
@@ -48,7 +51,7 @@ quit
 
 ```
 ./client​ <IP>:<PORT> <TRACKER INFO FILE>
-ex: ./client 127.0.0.1:18000 tracker_info.txt
+ex: ./client 127.0.0.1:18000 ../tracker_info.txt
 ```
 
 2. Create user account:
