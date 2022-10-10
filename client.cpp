@@ -23,10 +23,12 @@
 #include <time.h>
 #include <openssl/sha.h>
 #include <iomanip>
+#include <glog/logging.h>
 
 using namespace std;
 
 const long long CHUNK_SIZE = 524288;
+int MAX_DOWNLOAD_THREADS = 4;
 
 string sha(string file_name) {
   unsigned char hash[SHA_DIGEST_LENGTH]; // == 20
@@ -68,7 +70,7 @@ void download(int new_socket) {
   string path;
   string chunk_no;
   ss >> path >> chunk_no;
-
+  
   // open the file using open()
   int fd = open(path.c_str(), O_RDONLY);
   if (fd == -1) {
@@ -79,6 +81,10 @@ void download(int new_socket) {
   char *chunk = (char *)malloc(CHUNK_SIZE * sizeof(char));
   // clear the chunk
   memset(chunk, 0, CHUNK_SIZE);
+  LOG(INFO) << "Reading chunk " + chunk_no + " from " + path;
+  // int sleep_time = rand() % 3 + 1;
+  // LOG(INFO) << "chunk_no: " + chunk_no + " delay: " + to_string(sleep_time);
+  // this_thread::sleep_for(chrono::seconds(sleep_time));
   int bytes_read = pread(fd, chunk, CHUNK_SIZE, chunk_no_ll * CHUNK_SIZE);
   close(fd);
   if (bytes_read == -1) {
@@ -87,14 +93,69 @@ void download(int new_socket) {
     // return -1;
   }
   // sent chunk to client
+  LOG(INFO) << "Sending chunk " + chunk_no + " to client";
   write(new_socket, chunk, bytes_read);
   // close the socket
   close(new_socket);
 }
 
+void server(string ip, int port) {
+  int server_fd, client_socket, valread;
+  struct sockaddr_in address;
+  int opt = 1;
+  int addrlen = sizeof(address);
+
+  // Creating socket file descriptor
+  if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+    perror("socket failed");
+    exit(EXIT_FAILURE);
+  }
+  // Forcefully attaching socket to given port
+  if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt,
+                 sizeof(opt))) {
+    perror("setsockopt");
+    exit(EXIT_FAILURE);
+  }
+  address.sin_family = AF_INET;
+  address.sin_addr.s_addr = inet_addr(ip.c_str());
+  address.sin_port = htons(port);
+
+  // Forcefully attaching socket to the given port
+  if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+    perror("bind failed");
+    exit(EXIT_FAILURE);
+  }
+  if (listen(server_fd, 3) < 0) {
+    perror("listen");
+    exit(EXIT_FAILURE);
+  }
+  vector<thread> download_threads;
+  LOG(INFO) << "Client running as server on ip:port " + ip + ":" + to_string(port);
+  int clientid = 0;
+  while (true) {
+    // cout << "waiting for connection...\n";
+    if ((client_socket = accept(server_fd, (struct sockaddr *)&address,
+                                (socklen_t *)&addrlen)) < 0) {
+      perror("accept");
+      exit(EXIT_FAILURE);
+    }
+    // cout << "connected.\n";
+    // clients[client_socket] = clientid++;
+    LOG(INFO) << "Got connection from " + string(inet_ntoa(address.sin_addr)) + ":" + to_string(ntohs(address.sin_port));
+    LOG(INFO) << "Starting download thread...";
+    download_threads.push_back(thread(download, client_socket));
+    // handle_conn(client_socket);
+  }
+  for (auto &i : download_threads)
+    i.join();
+}
+
 int connect_to_server(string src, int chunk_no, int output_file_fd, string ip,
                       int port) {
   // printf("connecting to-> %s:%d\n", ip.c_str(), port);
+  
+  LOG(INFO) << "connecting to-> " + ip + ":" + to_string(port) + " for chunk " +
+               to_string(chunk_no);
   int sock = 0, valread;
   struct sockaddr_in serv_addr;
   if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -132,94 +193,69 @@ int connect_to_server(string src, int chunk_no, int output_file_fd, string ip,
     }
     offset += n;
   }
+  
+  LOG(INFO) << "received chunk " + to_string(chunk_no) + " from " + ip + ":" +
+               to_string(port);
   // write to file using pwrite()
+  LOG(INFO) << "writing chunk " + to_string(chunk_no) + " to output file at location (chunk_no * CHUNK_SIZE): " + to_string(chunk_no * CHUNK_SIZE);
   pwrite(output_file_fd, buffer, offset, chunk_no * CHUNK_SIZE);
   return 0;
 }
 
-void server(string ip, int port) {
-  int server_fd, client_socket, valread;
-  struct sockaddr_in address;
-  int opt = 1;
-  int addrlen = sizeof(address);
-
-  // Creating socket file descriptor
-  if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-    perror("socket failed");
-    exit(EXIT_FAILURE);
-  }
-  // Forcefully attaching socket to given port
-  if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt,
-                 sizeof(opt))) {
-    perror("setsockopt");
-    exit(EXIT_FAILURE);
-  }
-  address.sin_family = AF_INET;
-  address.sin_addr.s_addr = inet_addr(ip.c_str());
-  address.sin_port = htons(port);
-
-  // Forcefully attaching socket to the given port
-  if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-    perror("bind failed");
-    exit(EXIT_FAILURE);
-  }
-  if (listen(server_fd, 3) < 0) {
-    perror("listen");
-    exit(EXIT_FAILURE);
-  }
-  vector<thread> download_threads;
-
-  int clientid = 0;
-  while (true) {
-    // cout << "waiting for connection...\n";
-    if ((client_socket = accept(server_fd, (struct sockaddr *)&address,
-                                (socklen_t *)&addrlen)) < 0) {
-      perror("accept");
-      exit(EXIT_FAILURE);
-    }
-    // cout << "connected.\n";
-    // clients[client_socket] = clientid++;
-
-    download_threads.push_back(thread(download, client_socket));
-    // handle_conn(client_socket);
-  }
-  for (auto &i : download_threads)
-    i.join();
-}
 void getchunks(vector<peer_details> peers, int output_file_fd,
                string output_file, string gid, string fname, int tracker_sock) {
   long long fsize = peers[0].size;
   vector<thread> threads;
   int num_of_chunks = ceil(fsize / float(CHUNK_SIZE));
+  LOG(INFO) << "Total chunks: " + to_string(num_of_chunks);
   // loop chunks
   // pic ip in round robin fashion
   int index = 0;
-  for (int i = 0; i < num_of_chunks; i++) {
-    // create thread to download chunk
-    threads.push_back(thread(connect_to_server, peers[index].path, i,
+  int i = 0;
+  while(i<num_of_chunks){
+    vector<thread> threads;
+    for(int j=0;j<min(MAX_DOWNLOAD_THREADS, num_of_chunks-i);j++){
+      threads.push_back(thread(connect_to_server, peers[index].path, i,
                              output_file_fd, peers[index].ip,
                              peers[index].port)); // connect to peer
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
-
-    index = (index + 1) % peers.size();
+      index = (index + 1) % peers.size();
+      i++;
+    }
+    for(auto &i:threads)
+      i.join();
   }
-  // join threads
-  for (auto &t : threads) {
-    t.join();
-  }
+  // for (int i = 0; i < num_of_chunks; i++) {
+  //   // create thread to download chunk
+  //   LOG(INFO) << "Creating thread to download chunk: " + to_string(i);
+  //   threads.push_back(thread(connect_to_server, peers[index].path, i,
+  //                            output_file_fd, peers[index].ip,
+  //                            peers[index].port)); // connect to peer
+  //   index = (index + 1) % peers.size();
+  // }
+  // // join threads
+  // for (auto &t : threads) {
+  //   t.join();
+  // }
   // close file
   close(output_file_fd);
-  
+  LOG(INFO) << fname + " downloaded successfully.";
+  // print size of output file
+  struct stat st;
+  stat(output_file.c_str(), &st);
+  LOG(INFO) << "Size of output file: " + fname + " is " + to_string(st.st_size);
   // uploading file
+  LOG(INFO) << "Seeding file... " + fname;
   string shasum = sha(output_file);
   string upload_req = "upload_file " + output_file + " " + gid + " " + fname +
                       " " + to_string(fsize) + " " + shasum + " peer";
   send(tracker_sock, upload_req.c_str(), upload_req.length(), 0);
+  LOG(INFO) << "Seeding complete";
   // read respose from server
   char temp[1024] = {0};
   int valread = read(tracker_sock, temp, 1024);
 }
 int main(int argc, char const *argv[]) {
+  srand(time(0));
   if(argc != 3) {
     printf("Usage: ./client <ip>:<port> <tracker_info.txt>\n");
     exit(1);
@@ -267,6 +303,9 @@ int main(int argc, char const *argv[]) {
     printf("\nConnection Failed \n");
     return -1;
   }
+  string logfile = ip_port + ".log";
+  google::InitGoogleLogging(logfile.c_str());
+  google::SetLogDestination(google::GLOG_INFO, "log/");
   while (true) {
     printf(">>");
     string buf;
@@ -351,7 +390,12 @@ int main(int argc, char const *argv[]) {
       string output_file = dest_path + "/" + fname;
 
       int output_file_fd = open(output_file.c_str(), O_CREAT | O_WRONLY, 0777);
-
+      LOG(INFO) << "downloading " + output_file;
+      LOG(INFO) << "list of peers: ";
+      for (auto p : peers) {
+        LOG(INFO) << p.ip + " " + to_string(p.port) + " " + p.path + " " +
+                     to_string(p.size);
+      }
       auto getchunks_thread = thread(getchunks, peers, output_file_fd,
                                      output_file, gid, fname, sock);
       getchunks_thread.detach();
