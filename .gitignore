@@ -32,4 +32,5 @@
 *.app
 test/
 build/
+log/
 .vscode/

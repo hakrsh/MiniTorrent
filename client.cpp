@@ -98,6 +98,7 @@ void download(int new_socket) {
   write(new_socket, chunk, bytes_read);
   // close the socket
   close(new_socket);
+  free(chunk);
 }
 
 void server(string ip, int port) {
@@ -126,7 +127,7 @@ void server(string ip, int port) {
     perror("bind failed");
     exit(EXIT_FAILURE);
   }
-  if (listen(server_fd, 3) < 0) {
+  if (listen(server_fd, 10) < 0) {
     perror("listen");
     exit(EXIT_FAILURE);
   }
@@ -148,7 +149,8 @@ void server(string ip, int port) {
     // handle_conn(client_socket);
   }
   for (auto &i : download_threads)
-    i.join();
+    if (i.joinable())
+      i.join();
 }
 
 int connect_to_server(string src, int chunk_no, int output_file_fd, string ip,
@@ -213,9 +215,9 @@ void getchunks(vector<peer_details> peers, int output_file_fd,
   // loop chunks
   // pic ip in round robin fashion
   int index = 0;
+
   int i = 0;
   while(i<num_of_chunks){
-    vector<thread> threads;
     for(int j=0;j<min(MAX_DOWNLOAD_THREADS, num_of_chunks-i);j++){
       threads.push_back(thread(connect_to_server, peers[index].path, i,
                              output_file_fd, peers[index].ip,
@@ -223,9 +225,13 @@ void getchunks(vector<peer_details> peers, int output_file_fd,
       index = (index + 1) % peers.size();
       i++;
     }
+    LOG(INFO) << "Waiting for threads to finish...";
     for(auto &i:threads)
       i.join();
+    LOG(INFO) << "Threads finished.";
+    threads.clear();
   }
+
   // for (int i = 0; i < num_of_chunks; i++) {
   //   // create thread to download chunk
   //   LOG(INFO) << "Creating thread to download chunk: " + to_string(i);
@@ -306,7 +312,7 @@ int main(int argc, char const *argv[]) {
   }
   string logfile = ip_port + ".log";
   google::InitGoogleLogging(logfile.c_str());
-  google::SetLogDestination(google::GLOG_INFO, "log/");
+  google::SetLogDestination(google::GLOG_INFO, "../log/");
   while (true) {
     printf(">>");
     string buf;
