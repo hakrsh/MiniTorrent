@@ -81,6 +81,8 @@ struct sockaddr_in create_socket(string ip,int port,int &server_fd, bool isServe
 }
 
 int tracker_no;
+char req[1024] = {0};
+
 void sync(string msg){
   for(int i=0;i<trackers.size();i++){
     if(i==tracker_no) continue;
@@ -93,11 +95,15 @@ void sync(string msg){
         LOG(INFO) << "Tracker " << i+1 << " is down";
         continue;
     }
+    LOG(INFO) << "Sending " << msg << " to tracker " << i+1;
     send(client_socket, msg.c_str(), msg.length(), 0);
+    char buffer[1024] = {0};
+    valread = read(client_socket, buffer, 1024);
     close(client_socket);
   }
 }
 vector<string> tokens;
+
 string create_user() {
   string res;
   if (tokens.size() < 5)
@@ -119,6 +125,7 @@ string create_user() {
       usr.port = port;
       users[username] = usr;
       res = "User created";
+      sync(req);
     }
   }
   return res;
@@ -151,6 +158,7 @@ string login(string &curr_user) {
       users[username].alive = true;
       curr_user = username;
       res = "1login successful";
+      sync(req);
     }
   }
   return res;
@@ -166,6 +174,7 @@ string logout(string curr_user) {
     user_status[curr_user] = false;
     users[curr_user].alive = false;
     res = "logout successful";
+    sync(req);
   }
   return res;
 }
@@ -189,6 +198,7 @@ string create_group(string curr_usr) {
       groups[gid] = grp;
       users[curr_usr].grps.insert(gid);
       res = "group created";
+      sync(req);
     }
   }
   return res;
@@ -229,6 +239,7 @@ string join_group(string curr_user) {
         grp.pendingReq.insert(curr_user);
         groups[gid] = grp;
         res = "Request has been sent";
+        sync(req);
       }
     }
   }
@@ -287,6 +298,7 @@ string leave_group(string curr_user) {
           groups[gid] = grp;
           users[curr_user].grps.erase(gid);
           res = "left group";
+          sync(req);
         }
       }
     }
@@ -353,6 +365,7 @@ string accept_request(string curr_user) {
         groups[gid] = grp;
         users[uid].grps.insert(gid);
         res = "request accepted";
+        sync(req);
       }
     }
   }
@@ -386,6 +399,7 @@ string reject_request(string curr_user) {
         grp.pendingReq.erase(uid);
         groups[gid] = grp;
         res = "request rejected";
+        sync(req);
       }
     }
   }
@@ -438,6 +452,7 @@ string upload_file(string curr_user) {
           users[curr_user].downloads[fname].msg = "OK";
       }
       res = "uploaded";
+      sync(req);
     }
   }
   return res;
@@ -584,6 +599,7 @@ string stop_sharing(string curr_user) {
           grp.files.erase(fname);
         groups[gid] = grp;
         res = "Stopped sharing";
+        sync(req);
       }
     }
   }
@@ -615,7 +631,7 @@ void parsecmd(string s) {
     tokens.push_back(temp);
 }
 void handle_conn(int client_socket) {
-    char req[1024] = {0};
+    bzero(req, 1024);
     int valread = read(client_socket, req, 1024);
     if (valread < 1)
       return;
@@ -702,8 +718,9 @@ int main(int argc, char const *argv[]) {
     printf("Error: tracker_no is invalid\n");
     exit(1);
   }
-  int tracker_port = trackers[tracker_no - 1].port;
-  string tracker_ip = trackers[tracker_no - 1].ip;
+  tracker_no--; // tracker_no is 1 indexed
+  int tracker_port = trackers[tracker_no].port;
+  string tracker_ip = trackers[tracker_no].ip;
   
   string logfile = tracker_ip + to_string(tracker_port) + ".log";
   google::InitGoogleLogging(logfile.c_str());
@@ -719,7 +736,7 @@ int main(int argc, char const *argv[]) {
   struct sockaddr_in address = create_socket(tracker_ip, tracker_port, server_fd,true);
   int addrlen = sizeof(address);
   LOG(INFO) << "Socket created";
-  cout << "Tracker " << tracker_no << " is up and running" << endl;
+  cout << "Tracker " << tracker_no+1 << " is up and running" << endl;
   cout << "Tracker IP Address: " << tracker_ip << endl;
   cout << "Tracker Port Number: " << tracker_port << endl;
   cout << "Enter 'quit' to exit" << endl;
