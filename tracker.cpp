@@ -634,7 +634,9 @@ string upload_file(string curr_user)
         if (groups[gid].files[fname].hash != fhash)
           users[curr_user].downloads[fname].msg = "Corrupted";
         else
+        {
           users[curr_user].downloads[fname].msg = "OK";
+        }
       }
       res = "uploaded";
       sync(req);
@@ -689,11 +691,9 @@ string download_file(string curr_user)
   {
     string gid = tokens[1];
     string fname = tokens[2];
-    string path = tokens[3];
+    string download_path = tokens[3];
     if (groups.count(gid) == 0)
       res = "group doestn't exist";
-    // else if (filesystem::exists(path) == 0)
-    //   res = "Invalid path";
     else if (users[curr_user].grps.count(gid) == 0)
       res = "You are not a member of this group";
     else if (users[curr_user].downloads.count(fname) != 0)
@@ -710,20 +710,26 @@ string download_file(string curr_user)
         res = "File doesn't exist";
       else
       {
-        bool nopeer = true;
+        bool nopeers = true;
         for (auto &[peer, path] : grp.files[fname].peers)
+        {
           if (users[peer].alive)
           {
-            nopeer = false;
+            nopeers = false;
             res = res + users[peer].ip + " " + users[peer].port + " " + path +
                   " " + to_string(grp.files[fname].size) + " ";
-            download_info di;
-            di.gid = gid;
-            di.status = "D";
-            users[curr_user].downloads[fname] = di;
           }
-        if (nopeer)
+        }
+        if (nopeers)
           res = "No active peers";
+        else
+        {
+          groups[gid].files[fname].peers[curr_user] = download_path;
+          download_info di;
+          di.gid = gid;
+          di.status = "D";
+          users[curr_user].downloads[fname] = di;
+        }
       }
     }
   }
@@ -850,7 +856,8 @@ void handle_conn(int client_socket)
   parsecmd(req);
   printf("client%d: %s\n", clients[client_socket], req);
   string res, curr_user;
-  if(tokens.back() != "sync"){
+  if (tokens.back() != "sync")
+  {
     curr_user = tokens.back(); // last token is the username when not sync
     tokens.pop_back();
   }
