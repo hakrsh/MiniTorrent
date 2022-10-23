@@ -355,7 +355,7 @@ int main(int argc, char const *argv[]) {
            continue;
          }
          else {
-           LOG(INFO) << "Connected to tracker " << i;
+           LOG(INFO) << "Switched to tracker " << i+1;
            tracker_no = i;
            break;
          }
