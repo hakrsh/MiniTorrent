@@ -1,30 +1,4 @@
-#include <arpa/inet.h>
-#include <chrono>
-#include <cmath>
-#include <fcntl.h>
-#include <filesystem>
-#include <fstream>
-#include <iostream>
-#include <map>
-#include <netinet/in.h>
-#include <pthread.h>
-#include <set>
-#include <sstream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <string>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <thread>
-#include <unistd.h>
-#include <vector>
-#include <time.h>
-#include <openssl/sha.h>
-#include <iomanip>
-#include <glog/logging.h>
-
+#include "global.h"
 using namespace std;
 
 const long long CHUNK_SIZE = 524288;
@@ -48,6 +22,44 @@ string sha(string file_name) {
   }
   return ss.str();
 }
+
+struct sockaddr_in create_socket(string ip,int port,int &sockfd, bool isServer){
+    struct sockaddr_in address;
+    int opt = 1;
+    int addrlen = sizeof(address);
+
+    // Creating socket file descriptor
+    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+        perror("socket failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Forcefully attaching socket to the port
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt,
+                    sizeof(opt))) {
+        perror("setsockopt");
+        exit(EXIT_FAILURE);
+    }
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = inet_addr(ip.c_str());
+    address.sin_port = htons(port);
+
+    if(isServer){
+      // Forcefully attaching socket to the port
+      if (bind(sockfd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+          perror("bind failed");
+          exit(EXIT_FAILURE);
+      }
+    }
+    return address;
+}
+
+struct tracker_details {
+  string ip;
+  int port;
+};
+vector<tracker_details> trackers;
+
 
 map<int, int> clients;
 // peer details structure
@@ -103,30 +115,9 @@ void download(int new_socket) {
 
 void server(string ip, int port) {
   int server_fd, client_socket, valread;
-  struct sockaddr_in address;
-  int opt = 1;
+  struct sockaddr_in address = create_socket(ip, port, server_fd, true);
   int addrlen = sizeof(address);
 
-  // Creating socket file descriptor
-  if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-    perror("socket failed");
-    exit(EXIT_FAILURE);
-  }
-  // Forcefully attaching socket to given port
-  if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt,
-                 sizeof(opt))) {
-    perror("setsockopt");
-    exit(EXIT_FAILURE);
-  }
-  address.sin_family = AF_INET;
-  address.sin_addr.s_addr = inet_addr(ip.c_str());
-  address.sin_port = htons(port);
-
-  // Forcefully attaching socket to the given port
-  if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-    perror("bind failed");
-    exit(EXIT_FAILURE);
-  }
   if (listen(server_fd, 10) < 0) {
     perror("listen");
     exit(EXIT_FAILURE);
@@ -159,21 +150,8 @@ int connect_to_server(string src, int chunk_no, int output_file_fd, string ip,
   
   LOG(INFO) << "connecting to-> " + ip + ":" + to_string(port) + " for chunk " +
                to_string(chunk_no);
-  int sock = 0, valread;
-  struct sockaddr_in serv_addr;
-  if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    printf("\n Socket creation error \n");
-    return -1;
-  }
-
-  serv_addr.sin_family = AF_INET;
-  serv_addr.sin_port = htons(port);
-
-  // Convert IPv4 and IPv6 addresses from text to binary form
-  if (inet_pton(AF_INET, ip.c_str(), &serv_addr.sin_addr) <= 0) {
-    printf("\nInvalid address/ Address not supported \n");
-    return -1;
-  }
+  int sock, valread;
+  struct sockaddr_in serv_addr = create_socket(ip, port, sock, false);
 
   if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
     printf("\nConnection Failed \n");
@@ -263,56 +241,50 @@ void getchunks(vector<peer_details> peers, int output_file_fd,
 }
 int main(int argc, char const *argv[]) {
   srand(time(0));
-  if(argc != 3) {
-    printf("Usage: ./client <ip>:<port> <tracker_info.txt>\n");
+  if(argc != 4) {
+    printf("Usage: ./client <ip>:<port> <tracker_info.txt> <tracker_no> \n");
     exit(1);
   }
   string ip_port = argv[1];
-  string tracker_info = argv[2];
+  string tracker_info_file = argv[2];
+  int tracker_no = atoi(argv[3]);
   // parse ip and port
   string ip, port;
   int pos = ip_port.find(":");
   ip = ip_port.substr(0, pos);
   port = ip_port.substr(pos + 1);
   // printf("ip: %s, port: %s\n", ip.c_str(), port.c_str());
-  //check tracker_info.txt exists
-  ifstream file(tracker_info);
-  if(!file) {
-    printf("tracker_info.txt not found\n");
+  
+  ifstream tracker_info;
+  tracker_info.open(tracker_info_file);
+  if (!tracker_info.is_open()) {
+    printf("Error: tracker_info.txt not found\n");
     exit(1);
   }
-  // get tracker ip and port
-  string tracker_ip;
-  int tracker_port;
-  file >> tracker_ip >> tracker_port;
-
-  // run as server
-  auto server_thread = thread(server, ip, atoi(port.c_str()));
-
-  int sock = 0, valread;
-  struct sockaddr_in serv_addr;
-
-  if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    printf("\n Socket creation error \n");
-    return -1;
+  while (tracker_info.good()) {
+    tracker_details temp;
+    tracker_info >> temp.ip >> temp.port;
+    trackers.push_back(temp);
   }
-
-  serv_addr.sin_family = AF_INET;
-  serv_addr.sin_port = htons(tracker_port);
-
-  // Convert IPv4 and IPv6 addresses from text to binary form
-  if (inet_pton(AF_INET, tracker_ip.c_str(), &serv_addr.sin_addr) <= 0) {
-    printf("\nInvalid address/ Address not supported \n");
-    return -1;
+  tracker_info.close();
+  if (tracker_no >= trackers.size()) {
+    printf("Error: tracker_no is invalid\n");
+    exit(1);
   }
+  tracker_no--; // tracker_no is 1 indexed
+  int tracker_port = trackers[tracker_no].port;
+  string tracker_ip = trackers[tracker_no].ip;
 
-  if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-    printf("\nConnection Failed \n");
-    return -1;
-  }
   string logfile = ip_port + ".log";
   google::InitGoogleLogging(logfile.c_str());
   google::SetLogDestination(google::GLOG_INFO, "../log/");
+
+  // run as server
+  LOG(INFO) << "Running as server on : " + ip + ":" + port;
+  auto server_thread = thread(server, ip, atoi(port.c_str()));
+
+  int sock = 0, valread;
+  string curr_user = "$$$";
   while (true) {
     printf(">>");
     string buf;
@@ -326,8 +298,10 @@ int main(int argc, char const *argv[]) {
       tokens.push_back(temp);
     if (tokens[0] == "create_user")
       buf = buf + " " + ip + " " + port;
-    if (tokens[0] == "login")
+    if (tokens[0] == "login"){
+      tokens[0] = "login_res";
       buf = buf + " " + ip + " " + port; 
+    }
     if (tokens[0] == "upload_file") {
       if (tokens.size() < 3) {
         cout << "missing args\n";
@@ -367,6 +341,27 @@ int main(int argc, char const *argv[]) {
       } else
         tokens[0] = "download_res";
     }
+    struct sockaddr_in serv_addr = create_socket(tracker_ip, tracker_port, sock, false);
+    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+       LOG(INFO) << "Tracker " << tracker_no << " is down";
+       LOG(INFO) << "Trying to connect to another tracker";
+       for(int i=0; i<trackers.size(); i++) {
+         if(i == tracker_no) continue;
+         tracker_port = trackers[i].port;
+         tracker_ip = trackers[i].ip;
+         serv_addr = create_socket(tracker_ip, tracker_port, sock, false);
+         if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+           LOG(INFO) << "Tracker " << i << " is down";
+           continue;
+         }
+         else {
+           LOG(INFO) << "Connected to tracker " << i;
+           tracker_no = i;
+           break;
+         }
+       }
+    }
+    buf += " " + curr_user; // append curr_user to request 
     send(sock, buf.c_str(), buf.length(), 0);
     char buffer[1024] = {0};
     valread = read(sock, buffer, 1024);
@@ -407,8 +402,15 @@ int main(int argc, char const *argv[]) {
                                      output_file, gid, fname, sock);
       getchunks_thread.detach();
 
-    } else
+    } 
+    else if(tokens[0] == "login_res" && buffer[0] == '1') {
+      curr_user = tokens[1];
+      printf("%s\n", buffer+1);
+      LOG(INFO) << "Logged in as " << curr_user;
+    }
+    else
       printf("%s\n", buffer);
+    close(sock);
   }
   return 0;
 }

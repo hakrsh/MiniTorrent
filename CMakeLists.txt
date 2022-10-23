@@ -12,4 +12,4 @@ add_executable (client client.cpp)
 add_executable (tracker tracker.cpp)
 
 target_link_libraries(client PRIVATE Threads::Threads OpenSSL::Crypto glog::glog)
-target_link_libraries(tracker PRIVATE Threads::Threads)
+target_link_libraries(tracker PRIVATE Threads::Threads glog::glog)
