@@ -342,7 +342,9 @@ int main(int argc, char const *argv[]) {
         tokens[0] = "download_res";
     }
     struct sockaddr_in serv_addr = create_socket(tracker_ip, tracker_port, sock, false);
+    bool no_tracker = false;
     if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+       no_tracker = true;
        LOG(INFO) << "Tracker " << tracker_no << " is down";
        LOG(INFO) << "Trying to connect to another tracker";
        for(int i=0; i<trackers.size(); i++) {
@@ -357,9 +359,14 @@ int main(int argc, char const *argv[]) {
          else {
            LOG(INFO) << "Switched to tracker " << i+1;
            tracker_no = i;
+           no_tracker = false;
            break;
          }
        }
+    }
+    if(no_tracker) {
+      LOG(INFO) << "All trackers are down";
+      return 1;
     }
     buf += " " + curr_user; // append curr_user to request 
     send(sock, buf.c_str(), buf.length(), 0);
